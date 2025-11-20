@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Logyard</title>
+    <link rel="shortcut icon" href='data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20128%20128%22%3E%3Cpath%20fill%3D%22%23fac036%22%20d%3D%22M79%2054c7-2%2018-1%2021-1%205%200%2011%200%2012%207%200%205-1%209-8%209l-8%201-1%202h8c7-1%2012%202%2013%208%201%205-3%2010-9%209l-13%201-1%201%209%201c7%200%2010%204%2010%208%200%206-5%208-9%208H84l-1%201%2014%201c5%201%208%203%208%207%200%206-7%207-10%208l-18%201c-12%200-36%201-47-9-4-4-8-8-11-9-7-3-7-12-7-23%200-6-2-21%205-25%209-5%2025-9%2030-13%208-7%2013-18%2016-24%204-12%205-21%2013-21%2013%200%2013%2012%2013%2018%201%2011-14%2033-10%2034z%22%2F%3E%3Cpath%20fill%3D%22%23e48c15%22%20d%3D%22M68%2081c0%206%205%208%205%209-3%200-8%202-8%208%200%205%202%208%205%2010-2%200-5%202-5%207%200%208%205%2010%209%2011l20-1c2%200-10%200-19-2-3%200-6-2-6-5%200%200-1-5%203-7%200%200%202-2%209-2h3l13%201%203%201v-2l1-1h-8l-17-2s-6-1-6-8c0%200-1-5%208-6h28s-1-2%201-3l-23%201c-9%200-11-5-11-7v-2c0-5%204-6%2011-7l19-2h3l-1-2v-1l-15%202c-10%201-17%201-18-5%200-4%200-6%202-8%202-3%206-4%206-4h-1v-1c-8%201-13%206-13%2012%201%204%202%207%205%208%200%200-3%202-3%208z%22%2F%3E%3Cpath%20fill%3D%22%23e48c15%22%20d%3D%22M71%2068h-3s5%2019-13%2031c0%200-3%202-2%203%200%200%201%201%204-1%200%200%2018-12%2014-33z%22%2F%3E%3C%2Fsvg%3E'
+        type="image/x-icon">
+    <style>
+        html, body {
+            min-height: 100vh;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            background-color: oklch(8% 0.07911 292.692);
+            color: oklch(72% 0.07911 292.692);
+            color-scheme: dark;
+            font-family: monospace;
+        }
+        main {
+            flex-grow: 1;
+            margin-inline: 1rch;
+            padding-bottom: 50vh;
+        }
+        main > div {
+            display: contents;
+        }
+        .sep {
+            display: block;
+            height: 2rem;
+            margin-inline: 1rch;
+            border-right: 2px solid oklch(92% 0.07911 292.692);
+        }
+        pre {
+            margin-block: 0;
+            font-size: 1rem;
+            line-height: 1.5em;
+            text-wrap: wrap;
+        }
+        h1 {
+            color: oklch(92% 0.07911 292.692);
+        }
+        header {
+            position: sticky;
+            display: flex;
+            align-items: center;
+            top: 0;
+            height: fit-content;
+            width: 100%;
+            box-sizing: border-box;
+            background-color: oklch(8% 0.07911 292.692);
+            gap: 2rch;
+            padding-inline: 2rch;
+            border-bottom: 2px solid oklch(82% 0.01234 182);
+        }
+    </style>
+</head>
+<body>
+    <span id="top"></span>
+    <header>
+        <h1>Logyard</h1>
+        <div class="sep"></div>
+        <a href="/">Home</a>
+        <a href="/$">Terminate</a>
+        <div class="sep"></div>
+        <a href="#top">Scroll Top</a>
+        <a href="#bottom">Scroll Bottom</a>
+        <button popovertarget="controls">Controls</button>
+        <label>
+            <input type="checkbox" name="tail" id="tail">
+            Tail
+        </label>
+        <div class="sep"></div>
+        <div>
+            Status:
+            <span id="status">Starting</span>
+        </div>
+        <div>
+            Source:
+            <!--PATH-->
+        </div>
+    </header>
+    <div id="controls" popover="auto">
+        <button id="disconnect">Disconnect</button>
+        <button id="freeze">Freeze</button>
+    </div>
+    <main>
+    </main>
+    <span id="bottom"></span>
+    <script>
+        const encoder = new TextEncoder()
+        let frozen = false
+
+        const main = document.querySelector('main')
+        const status = document.getElementById('status')
+        const tail = document.getElementById('tail')
+        const disconnect = document.getElementById('disconnect')
+        const freeze = document.getElementById('freeze')
+        let entryWrapper = document.createElement('div') 
+        let offEntryWrapper = document.createElement('div')
+        
+        
+        disconnect.onclick = disconnectHandler
+        freeze.onclick = freezeHandler
+        main.appendChild(entryWrapper)
+
+
+        const socket = new WebSocket(`ws://${location.host}${location.pathname}/$`)
+        socket.onmessage = socketMessageHandler
+        socket.onopen = socketOpenHandler
+        socket.onclose = socketCloseHandler
+        socket.onerror = socketErrorHandler
+
+        
+        const ENTRY_POOL_SIZE = 1 << 10
+        let readyEntryPool = []
+        let usedEntryPool = []
+        for(i=0;i < ENTRY_POOL_SIZE;i++) {
+            readyEntryPool.push(document.createElement('pre'))
+        }
+        function flushEntryPool() {
+            if (frozen) return frozenFlush()
+
+            console.log("Flushing entry pool. Chunk size: " + chunk.size) 
+            usedEntryPool.push(...readyEntryPool.splice(0))
+
+            /* 15 minutes were wasted here -> */ ; // but that's less than last time 👍
+            [readyEntryPool, usedEntryPool] = [usedEntryPool, readyEntryPool]
+            let ew = offEntryWrapper
+            offEntryWrapper = entryWrapper
+            entryWrapper = ew
+
+            main.removeChild(main.lastChild)
+            main.appendChild(chunk.node)
+            entryWrapper.replaceChildren('')
+            main.appendChild(entryWrapper)
+
+            chunk = newChunk()
+            chunks.push(chunk)
+        }
+        function frozenFlush() {
+            console.log("Frozen flush. Chunk size: " + chunk.size) 
+            chunk = newChunk()
+            frozenChunks.push(chunk)
+        }
+        
+        
+        const MAX_CHUNK_SIZE = 100 << 10
+        let chunk = newChunk()
+        const chunks = [chunk]
+        const frozenChunks = []
+        function newChunk() {
+            return {
+                size: 0,
+                lines: [],
+                node: document.createElement('pre')
+            }
+        }
+
+
+        let tailCounter = 0
+        const tailSkips = 2 << 2
+        function socketMessageHandler(event)  {
+            if (frozen) return socketFrozenMessageHandler(event)
+            if (chunk.size > MAX_CHUNK_SIZE) flushEntryPool()
+            entryElem = readyEntryPool.pop()
+            if (!entryElem) {
+                flushEntryPool()
+                entryElem = readyEntryPool.pop()
+            }
+        
+            const line = event.data
+            chunk.lines.push(line)
+            chunk.node.textContent += line
+            chunk.size += encoder.encode(line).length
+            usedEntryPool.push(entryElem)
+            entryElem.textContent = line
+            entryWrapper.appendChild(entryElem)
+            if (tail.checked && tailCounter++ === 0) {
+                window.scrollTo({
+                    top: document.body.scrollHeight,
+                    behavior: "smooth" 
+                });
+            } else if (tailCounter > tailSkips) tailCounter = 0
+        }
+        function socketFrozenMessageHandler(event) {
+            if (chunk.size > MAX_CHUNK_SIZE) frozenFlush()
+            const line = event.data
+            chunk.lines.push(line)
+            chunk.node.textContent += line
+            chunk.size += encoder.encode(line).length
+        }
+        function socketOpenHandler(event) {
+            status.textContent = "Connected"
+            socket.onclose = (event) => {
+                status.textContent = "Closed"
+            }
+        }
+        function socketCloseHandler(event) {
+            status.textContent = "Error" // fixed by onopen
+        }
+        function socketErrorHandler(event) {
+            status.textContent = "Error"
+            console.error(event)
+        }
+
+
+        function disconnectHandler(event) {
+            socket.close()
+        }
+
+        function unfreezeHandler(event) {
+            freeze.textContent = 'Freeze'
+            freeze.onclick = freezeHandler
+            frozen = false
+            let ew = main.lastChild
+            main.removeChild(ew)
+            frozenChunks.splice(0).forEach((ch) => main.appendChild(ch.node))
+            main.appendChild(ew)
+            chunk = newChunk()
+            chunks.push(chunk)
+        }
+        function freezeHandler(event) {
+            freeze.textContent = 'Unfreeze'
+            freeze.onclick = unfreezeHandler
+            flushEntryPool()
+            frozen = true
+            frozenChunks.push(chunks.pop())
+        }
+    </script>
+</body>
+</html>

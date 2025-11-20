@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Logyard</title>
+    <link rel="shortcut icon" href='data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20128%20128%22%3E%3Cpath%20fill%3D%22%23fac036%22%20d%3D%22M79%2054c7-2%2018-1%2021-1%205%200%2011%200%2012%207%200%205-1%209-8%209l-8%201-1%202h8c7-1%2012%202%2013%208%201%205-3%2010-9%209l-13%201-1%201%209%201c7%200%2010%204%2010%208%200%206-5%208-9%208H84l-1%201%2014%201c5%201%208%203%208%207%200%206-7%207-10%208l-18%201c-12%200-36%201-47-9-4-4-8-8-11-9-7-3-7-12-7-23%200-6-2-21%205-25%209-5%2025-9%2030-13%208-7%2013-18%2016-24%204-12%205-21%2013-21%2013%200%2013%2012%2013%2018%201%2011-14%2033-10%2034z%22%2F%3E%3Cpath%20fill%3D%22%23e48c15%22%20d%3D%22M68%2081c0%206%205%208%205%209-3%200-8%202-8%208%200%205%202%208%205%2010-2%200-5%202-5%207%200%208%205%2010%209%2011l20-1c2%200-10%200-19-2-3%200-6-2-6-5%200%200-1-5%203-7%200%200%202-2%209-2h3l13%201%203%201v-2l1-1h-8l-17-2s-6-1-6-8c0%200-1-5%208-6h28s-1-2%201-3l-23%201c-9%200-11-5-11-7v-2c0-5%204-6%2011-7l19-2h3l-1-2v-1l-15%202c-10%201-17%201-18-5%200-4%200-6%202-8%202-3%206-4%206-4h-1v-1c-8%201-13%206-13%2012%201%204%202%207%205%208%200%200-3%202-3%208z%22%2F%3E%3Cpath%20fill%3D%22%23e48c15%22%20d%3D%22M71%2068h-3s5%2019-13%2031c0%200-3%202-2%203%200%200%201%201%204-1%200%200%2018-12%2014-33z%22%2F%3E%3C%2Fsvg%3E'
+        type="image/x-icon">
+    <style>
+        :root {
+            --an-d: 6.2s;
+        }
+        html, body {
+            height: 100vh;
+            width: 100vw;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            background-color: oklch(8% 0.07911 292.692);
+            color: oklch(72% 0.07911 292.692);
+            color-scheme: dark;
+            font-family: monospace;
+            align-content: start;
+            justify-items: start;
+        }
+        h1 {
+            justify-self: center;
+        }
+        h1, h2, h3 {
+            color: oklch(92% 0.07911 292.692);
+        }
+        li > h3 {
+            margin-block-end: .2rem;
+        }
+        li > ul {
+            padding-inline-start: 2rch;
+        }
+        h1::before {
+            content: "|     ";
+            white-space: pre;
+            animation: y var(--an-d) ease-out infinite;
+        }
+        ul {
+            padding-inline-start: 3rch;
+        }
+        ul > li {
+            margin-bottom: .2rem;
+        }
+        @keyframes y {
+            0%  { content: "|>    "; }
+            10% { content: "|>>   "; }
+            20% { content: "|>>>  "; }
+            30% { content: "| >>> "; }
+            40% { content: "|  >>>"; }
+            50% { content: "|   >>"; }
+            60% { content: "|    >"; }
+            70% { content: "|     "; }
+        }
+        h1::after {
+            content: "     |";
+            white-space: pre;
+            animation: x var(--an-d) ease-in calc(var(--an-d) / 1.3) infinite;
+        }
+        @keyframes x {
+            0%  { content: ">    |"; }
+            10% { content: ">>   |"; }
+            20% { content: ">>>  |"; }
+            30% { content: " >>> |"; }
+            40% { content: "  >>>|"; }
+            50% { content: "   >>|"; }
+            60% { content: "    >|"; }
+            70% { content: "     |"; }
+        }
+        .a {
+            position: relative;
+            margin: 2rem;
+            border: 2px solid oklch(82% 0.01234 182);
+            height: fit-content;
+            width: fit-content;
+            padding: 0 1rem 3.69rem;
+        }
+        .a::after {
+            position: absolute;
+            content: "\200b";
+            opacity: .42;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 4rem;
+            z-index: -1;
+            mask-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" xml:space="preserve" viewBox="0 0 512 512"><path d="M420 275h-7a53 53 0 0 0-36-92h-12l-51-50c-1-2-4-2-6-2l-38 8a7 7 0 0 0-4 11l24 33h-27a7 7 0 1 0 0 14h41a7 7 0 0 0 6-11l-26-36 23-4 50 49 5 2h15c19 0 35 14 39 32h-45a7 7 0 1 0 0 14h45c-4 18-20 32-39 32h-32l-50-50c-2-2-4-2-7-2l-37 7a7 7 0 0 0-5 11l25 34h-78l1-1 1-1h1l1-2h1l1-2 1-2 1-1 1-1v-1a49 49 0 0 0 2-3l1-1 1-2v-1l1-1v-1l1-2v-2l1-1v-3l1-1v-7a52 52 0 0 0 0-6v-1a37 37 0 0 0 0-3v-2l-1-2v-2l-1-2v-2l-1-2v-1l-1-1v-1a39 39 0 0 0-2-2v-2a54 54 0 0 0-2-2v-1l-1-1a55 55 0 0 0-4-5l-1-1-1-1-1-1-1-1h24a7 7 0 1 0 0-14h-59a53 53 0 0 0-36 92H92a53 53 0 0 0 0 106h109a53 53 0 0 0 53-56l-1-1v-5l-1-2v-3l-1-1v-2l-1-2v-1l-1-1v-1l-1-2v-1a49 49 0 0 0-3-3v-1l-1-1-1-1-1-1v-1l-1-1-1-1-1-1-1-1-1-1-1-1h49c3 0 5-2 6-4s1-5-1-7l-26-36 23-4 51 49 5 2h77c19 0 35 14 39 32H356a7 7 0 1 0 0 14h103c-4 18-20 32-39 32H258a7 7 0 1 0 0 14h162a53 53 0 0 0 0-106zm-301-39a39 39 0 1 1 78 0 39 39 0 0 1-78 0zm-66 92a39 39 0 1 1 78 0 39 39 0 0 1-78 0zm112 39h-37v-1l1-1 1-1 1-1a59 59 0 0 0 2-3l1-1 1-1 1-1 1-1v-1l1-1a49 49 0 0 0 2-4v-1l1-1v-1l1-2v-1l1-1v-4l1-2v-5l1-1v-6l-1-1v-5l-1-2v-4l-1-1v-1l-1-2v-1l-1-1v-1l-1-2v-1a49 49 0 0 0-2-3l-1-1-1-1-1-1-1-1v-1l-1-1-1-1-1-1-1-1-1-1-1-1h38l-1 1-1 1-1 1-1 1-1 1a51 51 0 0 0-1 2l-1 1-1 1-1 1a92 92 0 0 0-1 2l-1 1v1l-1 2v1l-1 1v1l-1 1v2l-1 1v1l-1 1v5l-1 1v16l1 1v3a61 61 0 0 0 1 3v1l1 1v2l1 1v1l1 1v2l1 1v1l1 1 1 1v1l1 1 1 1 1 1 1 1v2h1a36 36 0 0 0 2 2l1 1 1 1zm36 0a39 39 0 1 1 0-78 39 39 0 0 1 0 78z" class="st1"/><path d="M243 184a7 7 0 0 0-8 1 7 7 0 0 0 0 10 7 7 0 0 0 10 0 7 7 0 0 0 0-10 6 6 0 0 0-2-1zm-85 29a23 23 0 1 0 0 46 23 23 0 0 0 0-46zm0 32a9 9 0 1 1 0-18 9 9 0 0 1 0 18zm43 60a23 23 0 1 0 0 46 23 23 0 0 0 0-46zm0 32a9 9 0 1 1 0-18 9 9 0 0 1 0 18zm-86-9a23 23 0 1 0-47 0 23 23 0 0 0 47 0zm-33 0a9 9 0 1 1 19 0 9 9 0 0 1-19 0zm231 7a7 7 0 1 0 0-14h-11a7 7 0 1 0 0 14h11zm30-92a7 7 0 1 0 0-14h-11a7 7 0 1 0 0 14h11z" class="st1"/></svg>');
+            mask-size: contain;
+            mask-position: center;
+            background-color: oklch(92% 0.07911 292.692);
+        }
+    </style>
+</head>
+<body>
+    <div class="a">
+        <header>
+            <h1>Logyard</h1>
+        </header>
+        <hr>
+        <section>
+            <h2>Available sources:</h2>
+            <ul><!--SOURCES-->
+            </ul>
+        </section>
+        <a href="/$">Terminate</a>
+    </div>
+</body>
+</html>
