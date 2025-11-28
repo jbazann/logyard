@@ -25,9 +25,9 @@ import (
 )
 
 var (
-//go:embed index.html
+	//go:embed index.html
 	indexHTML string
-//go:embed viewer.html
+	//go:embed viewer.html
 	viewerHTML string
 )
 
@@ -86,7 +86,7 @@ func parseFlags() {
 	flag.StringVar(&homePath, "hdir", "",
 		"The home directory for Logyard "+
 			"(aliased as \"app://\" in other user-provided paths). "+
-		"If empty, the installation directory will be used.")
+			"If empty, the installation directory will be used.")
 	flag.BoolVar(&logging, "l", false, "Enable Logyard's own logging to stderr.")
 	flag.BoolVar(&captureLogs, "cl", false, "Enable Logyard's own logging directly into a capture file.")
 	flag.BoolVar(&rolling, "rl", false, "Enable rolling logs. Also applies to captures. Does not enable logging by itself.")
@@ -113,20 +113,46 @@ type CoreResources struct {
 }
 
 type ServerResources struct {
-	cachedResponse atomic.Pointer[[]byte]
-	s              *http.Server
-	mux            *http.ServeMux
-	log            *log.Logger
-	allSources     []SourceDescriptor
-	statSources    []SourceDescriptor
+	// A copy of [indexHTML] with the currently known sources
+	// listed at the <!--SOURCES--> placeholder.
+	cachedHome atomic.Pointer[[]byte]
+	s          *http.Server
+	mux        *http.ServeMux
+	// The logger for "server mode" routines.
+	log *log.Logger
+	// Descriptors for all the sources listed in [sourcePaths].
+	rawSources []RawSourceDescriptor
+	// Descriptors for all the valid sources in "allSources" that
+	// can be listed for viewing.
+	validSources []ValidSourceDescriptor
 }
 
-type SourceDescriptor struct {
+// Describes a user-provided source path.
+type RawSourceDescriptor struct {
+	// The path as provided by the user.
 	rawPath string
-	path    string
-	valid   bool
-	info    os.FileInfo
-	sub     *[]SourceDescriptor
+	// The absolute path resolved by the application.
+	//
+	// If valid is set to true,
+	// then this field is a valid absolute path,
+	// otherwise it's the empty string.
+	absPath string
+	// Whether or not the source could be resolved to a real
+	// file or directory.
+	valid bool
+}
+
+// Describes a source path validated by the application.
+type ValidSourceDescriptor struct {
+	// An absolute path to the source.
+	path string
+	// A file descriptor as returned by [os.Stat]
+	info os.FileInfo
+	// If a ValidSourceDescriptor points to a directory,
+	// sub contains all the log files found within
+	// said directory and its descendants. Intermediate
+	// directories are ignored.
+	sub *[]ValidSourceDescriptor
 }
 
 func main() {
@@ -277,16 +303,16 @@ func startServer(cr *CoreResources) (err error) {
 	sr.log.Printf("Resolving sourcePaths: %q", sourcePaths)
 	var resolved []string
 	for str := range strings.SplitSeq(sourcePaths, ",") {
-		var sd SourceDescriptor
+		var sd RawSourceDescriptor
 		sd.rawPath = str
 		abs, err := resolveAbsolutePath(str)
 		if sd.valid = err == nil; sd.valid {
-			sd.path = abs
+			sd.absPath = abs
 			resolved = append(resolved, abs)
 		} else {
 			log.Printf("failed to resolve source path %q: %+v", str, err)
 		}
-		sr.allSources = append(sr.allSources, sd)
+		sr.rawSources = append(sr.rawSources, sd)
 	}
 	sr.log.Printf("Resolved sources: %q", resolved)
 	statSources(&sr)
@@ -310,29 +336,31 @@ func startServer(cr *CoreResources) (err error) {
 }
 
 func statSources(sr *ServerResources) {
-	for _, src := range sr.allSources {
+	for _, src := range sr.rawSources {
 		if !src.valid {
 			continue
 		}
-		i, err := os.Stat(src.path)
+		i, err := os.Stat(src.absPath)
 		if err != nil {
-			sr.log.Printf("failed stat %q: %+v", src.path, err)
+			sr.log.Printf("failed stat %q: %+v", src.absPath, err)
 			continue
 		}
 		if !strings.HasSuffix(i.Name(), ".log") && !i.IsDir() {
-			sr.log.Printf("Warning: not a log file or directory %q", src.path)
+			sr.log.Printf("Warning: not a log file or directory %q", src.absPath)
 			continue
 		}
-		src.info = i
-		if !src.info.IsDir() {
+		var vsd ValidSourceDescriptor
+		vsd.info = i
+		vsd.path = src.absPath
+		if !vsd.info.IsDir() {
 			continue
 		}
-		src.sub = new([]SourceDescriptor)
-		sr.log.Printf("Walking %q", src.path)
-		filepath.WalkDir(src.path, func(path string, d os.DirEntry, err error) error {
+		vsd.sub = new([]ValidSourceDescriptor)
+		sr.log.Printf("Walking %q", vsd.path)
+		filepath.WalkDir(vsd.path, func(path string, d os.DirEntry, err error) error {
 			if err != nil {
 				sr.log.Printf("Found problematic path %q: %+v", path, err)
-				sr.log.Printf("Aborting walk of %q", src.path)
+				sr.log.Printf("Aborting walk of %q", vsd.path)
 				return err
 			}
 			if strings.HasSuffix(path, ".log") {
@@ -341,19 +369,17 @@ func statSources(sr *ServerResources) {
 					sr.log.Print(err)
 					return nil
 				}
-				sd := SourceDescriptor{
-					rawPath: path,
-					path:    path,
-					valid:   true,
-					info:    f,
+				sub := ValidSourceDescriptor{
+					path: path,
+					info: f,
 				}
-				*src.sub = append(*src.sub, sd)
-				sr.log.Printf("Confirmed %q sub-source: %q", src.path, sd.path)
+				*vsd.sub = append(*vsd.sub, sub)
+				sr.log.Printf("Found sub-source: %q", sub.path)
 			}
 			return nil
 		})
-		sr.statSources = append(sr.statSources, src)
-		sr.log.Printf("Confirmed source: %q", src.path)
+		sr.validSources = append(sr.validSources, vsd)
+		sr.log.Printf("Confirmed source: %q", vsd.path)
 	}
 }
 
@@ -367,7 +393,7 @@ func buildServer(sr *ServerResources, addr string) (shutdown chan any) {
 
 	sr.mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		sr.log.Print("[/]")
-		w.Write(*sr.cachedResponse.Load())
+		w.Write(*sr.cachedHome.Load())
 	})
 	sr.mux.HandleFunc("/$", func(w http.ResponseWriter, r *http.Request) {
 		sr.log.Print("[/$]")
@@ -379,26 +405,26 @@ func buildServer(sr *ServerResources, addr string) (shutdown chan any) {
 		}()
 	})
 
-	for _, ss := range sr.statSources {
-		if ss.info.IsDir() {
-			for _, sub := range *ss.sub {
+	for _, vsd := range sr.validSources {
+		if vsd.info.IsDir() {
+			for _, sub := range *vsd.sub {
 				if sub.info.IsDir() {
 					continue
 				}
 				buildSourceEndpoints(sr, &sub)
 			}
 		} else {
-			buildSourceEndpoints(sr, &ss)
+			buildSourceEndpoints(sr, &vsd)
 		}
 	}
 
 	return shutdown
 }
 
-func buildSourceEndpoints(sr *ServerResources, src *SourceDescriptor) {
-	path, _ := strings.CutPrefix(src.path, "/")
+func buildSourceEndpoints(sr *ServerResources, vsd *ValidSourceDescriptor) {
+	path, _ := strings.CutPrefix(vsd.path, "/")
 	path = "/src/" + strings.ReplaceAll(path, "\\", "/")
-	document := []byte(strings.Replace(viewerHTML, "<!--PATH-->", src.path, 1))
+	document := []byte(strings.Replace(viewerHTML, "<!--PATH-->", vsd.path, 1))
 	sr.log.Printf("Endpoint %s", path)
 	sr.mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
 		sr.log.Printf("[%s]", path)
@@ -419,7 +445,7 @@ func buildSourceEndpoints(sr *ServerResources, src *SourceDescriptor) {
 			sr.log.Printf("%s Upgrade error: %+v", tag, err)
 		}
 		go logReads(tag, sr, c)
-		streamLogFile(tag, sr, src, c)
+		streamLogFile(tag, sr, vsd, c)
 	})
 }
 
@@ -427,8 +453,8 @@ type WriterFunc func([]byte) (int, error)
 
 func (f WriterFunc) Write(p []byte) (int, error) { return f(p) }
 
-func streamLogFile(tag string, sr *ServerResources, sd *SourceDescriptor, conn *websocket.Conn) {
-	f, err := os.Open(sd.path)
+func streamLogFile(tag string, sr *ServerResources, vsd *ValidSourceDescriptor, conn *websocket.Conn) {
+	f, err := os.Open(vsd.path)
 	if err != nil {
 		sr.log.Printf("%s File error: %+v", tag, err)
 		conn.Close()
@@ -440,7 +466,7 @@ func streamLogFile(tag string, sr *ServerResources, sd *SourceDescriptor, conn *
 	t := time.NewTimer(0)
 	var lastKnownSize int64
 	for {
-		info, err := os.Stat(sd.path)
+		info, err := os.Stat(vsd.path)
 		if err != nil {
 			sr.log.Printf("%s Stat error: %+v", tag, err)
 			conn.Close()
@@ -502,30 +528,30 @@ const sourceGroupHTML string = "<li><h3>%s</h3><ul>%s</ul></li>"
 const sourceLinkHTML string = "<li><a href=\"/src/%s\">%s</a></li>"
 
 func buildHome(sr *ServerResources) {
-	sr.log.Printf("Building home with %d root sources.", len(sr.statSources))
+	sr.log.Printf("Building home with %d root sources.", len(sr.validSources))
 	var sb strings.Builder
-	for _, ss := range sr.statSources {
-		if ss.info.IsDir() {
+	for _, vsd := range sr.validSources {
+		if vsd.info.IsDir() {
 			var group strings.Builder
-			sr.log.Printf("Listing %d sources under %q.", len(*ss.sub), ss.path)
-			for _, sub := range *ss.sub {
+			sr.log.Printf("Listing %d sources under %q.", len(*vsd.sub), vsd.path)
+			for _, sub := range *vsd.sub {
 				if sub.info.IsDir() {
 					continue
 				}
-				rel, err := filepath.Rel(ss.path, sub.path)
+				rel, err := filepath.Rel(vsd.path, sub.path)
 				if err != nil {
 					sr.log.Printf("Relative sub-source path error: %+v", err)
 					continue
 				}
 				group.Write(fmt.Appendf(nil, sourceLinkHTML, sub.path, rel))
 			}
-			sb.Write(fmt.Appendf(nil, sourceGroupHTML, ss.path, group.String()))
+			sb.Write(fmt.Appendf(nil, sourceGroupHTML, vsd.path, group.String()))
 		} else {
-			sb.Write(fmt.Appendf(nil, sourceLinkHTML, ss.path, ss.path))
+			sb.Write(fmt.Appendf(nil, sourceLinkHTML, vsd.path, vsd.path))
 		}
 	}
 	resp := []byte(strings.Replace(indexHTML, "<!--SOURCES-->", sb.String(), 1))
-	sr.cachedResponse.Store(&resp)
+	sr.cachedHome.Store(&resp)
 }
 
 func getLogger(p string) *log.Logger {
