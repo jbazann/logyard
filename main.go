@@ -40,79 +40,97 @@ const (
 	DEFAULT_CAPTURE_DIR string = HOME_DIR_SYMBOL + "captures/"
 )
 
-// Flag variables, bound by [parseFlags]
-var (
-	// Server mode only.
-	serverPort int
-	// Polling interval when streaming files in poling mode.
-	// Server mode only.
-	pollIntervalMs int
-	// Lines to print in demo mode. Any non-negative value
-	// enables this mode.
-	// A value of zero (0) prints until [os.Stdin] is closed.
-	// Demo mode only.
-	demoLines int
-	// The maximum amount of milliseconds to sleep between prints.
-	// Demo mode only.
-	maxDemoSleep int
-	logChunkMb   int // Max rolling log file size, in megabytes.
-	// Capture ID, to avoid file name collisions.
-	// May be reused by modes other than capture.
-	captureId string
+type BaseConfig struct {
 	// Where process files are found/created. May or may not have a trailing slash.
+	//
 	// This this the value 'app://' expands to for user-provided paths.
-	homePath string
+	homePath     string
+	logging      bool // Whether the process should write its own logs.
+	captureLogs  bool // Whether the process should write its own logs to a capture file.
+	rolling      bool // Whether log files should be cycled after exceeding [logChunkMb].
+	logChunkSize int  // Max rolling log file size, in megabytes.
+}
+
+type DemoConfig struct {
+	// Amount of lines to print in demo mode.
+	// Enables demo mode for non-negative values.
+	// A value of zero prints until SIGKILL.
+	demoLines int
+	// Maximum amount of milliseconds to sleep between prints.
+	maxDemoSleep int
+}
+
+type CaptureConfig struct {
+	capture bool // Whether the process should run in capture mode.
+	// Acts as namespace for capture files.
+	// May be reused by modes other than capture,
+	// to avoid name collisions in general.
+	captureId string
 	// Where capture files are created.
-	// Capture mode only.
 	capturePath string
+}
+
+type ServerConfig struct {
+	port int
+	// Polling interval when streaming files in polling mode.
+	// In milliseconds.
+	pollingInterval int
 	// Paths to scan for log files, provided by the user as a comma-separated list.
-	// Server mode only.
 	sourcePaths string
-	capture     bool // Whether the process should run in capture mode.
-	logging     bool // Whether the process should write its own logs.
-	captureLogs bool // Whether the process should write its own logs to a capture file.
-	rolling     bool // Whether log files should be cycled after exceeding [logChunkMb].
-)
+}
 
-func parseFlags() {
-	_now := time.Now().UTC()
-	_yearStart := time.Date(_now.Year(), 1, 1, 0, 0, 0, 0, time.UTC)
-	_secOfYear := int(_now.Sub(_yearStart).Seconds())
-	_DEFAULT_ID := fmt.Sprintf("%d", _secOfYear)
+// Wrapper for flag variables, bound by [parseFlags]
+type GlobalConfig struct {
+	BaseConfig
+	ServerConfig
+	CaptureConfig
+	DemoConfig
+}
 
-	// general flags
-	flag.StringVar(&captureId, "id", _DEFAULT_ID,
-		"A unique identifier for the generated file(s). The default value is the UTC second of the current year, computed on startup.")
-	flag.StringVar(&homePath, "hdir", "",
+func getDefaultCaptureID(now time.Time) string {
+	yearStart := time.Date(now.Year(), 1, 1, 0, 0, 0, 0, time.UTC)
+	secOfYear := int(now.Sub(yearStart).Seconds())
+	return fmt.Sprintf("%d", secOfYear)
+}
+
+func (c *GlobalConfig) parseFlags() {
+	_DEFAULT_ID := getDefaultCaptureID(time.Now().UTC())
+
+	// base
+	flag.StringVar(&c.homePath, "hdir", "",
 		"The home directory for Logyard "+
 			"(aliased as \"app://\" in other user-provided paths). "+
 			"If empty, the installation directory will be used.")
-	flag.BoolVar(&logging, "l", false, "Enable Logyard's own logging to stderr.")
-	flag.BoolVar(&captureLogs, "cl", false, "Enable Logyard's own logging directly into a capture file.")
-	flag.BoolVar(&rolling, "rl", false, "Enable rolling logs. Also applies to captures. Does not enable logging by itself.")
-	flag.IntVar(&logChunkMb, "chunkmb", 10, "Max rolling log file size, in megabytes.")
+	flag.BoolVar(&c.logging, "l", false, "Enable Logyard's own logging to stderr.")
+	flag.BoolVar(&c.captureLogs, "cl", false, "Enable Logyard's own logging directly into a capture file.")
+	flag.BoolVar(&c.rolling, "rl", false, "Enable rolling logs. Also applies to captures. Does not enable logging by itself.")
+	flag.IntVar(&c.logChunkSize, "chunkmb", 10, "Max rolling log file size, in megabytes.")
 	// server mode
-	flag.IntVar(&serverPort, "port", DEFAULT_PORT, "The port for the web UI. Server mode only.")
-	flag.IntVar(&pollIntervalMs, "polling", 2000, "Polling interval when using polling mode to stream a file'. Server mode only.")
-	flag.StringVar(&sourcePaths, "src", DEFAULT_CAPTURE_DIR, "A comma-separated list of paths to scan for log files. "+
+	flag.IntVar(&c.port, "port", DEFAULT_PORT, "The port for the web UI. Server mode only.")
+	flag.IntVar(&c.pollingInterval, "polling", 2000, "Polling interval when using polling mode to stream a file'. Server mode only.")
+	flag.StringVar(&c.sourcePaths, "src", DEFAULT_CAPTURE_DIR, "A comma-separated list of paths to scan for log files. "+
 		"May contain directories or specific files. Directories are always scanned recursively. Server mode only.")
 	// capture mode
-	flag.BoolVar(&capture, "c", false, "Toggle capture mode.")
-	flag.StringVar(&capturePath, "cdir", DEFAULT_CAPTURE_DIR, "The directory where capture files are created. Capture mode only.")
+	flag.StringVar(&c.captureId, "id", _DEFAULT_ID,
+		"A unique identifier for the generated file(s). The default value is the UTC second of the current year, computed on startup.")
+	flag.BoolVar(&c.capture, "c", false, "Toggle capture mode.")
+	flag.StringVar(&c.capturePath, "cdir", DEFAULT_CAPTURE_DIR, "The directory where capture files are created. Capture mode only.")
 	// demo mode
-	flag.IntVar(&demoLines, "demo", -1, "A number of lines to print to sdout. Enables demo mode for any non-negative value. "+
+	flag.IntVar(&c.demoLines, "demo", -1, "A number of lines to print to sdout. Enables demo mode for any non-negative value. "+
 		"A value of zero (0) will print logs indefinitely.")
-	flag.IntVar(&maxDemoSleep, "maxDemoInterval", 500,
+	flag.IntVar(&c.maxDemoSleep, "maxDemoInterval", 500,
 		"The maximum number of milliseconds to sleep between demo logs. "+
 			"The actual time is randomized between prints, following a uniform distribution.")
 	flag.Parse()
 }
 
-type CoreResources struct {
+type Globals struct {
+	*GlobalConfig
 	shutdown chan int
 }
 
 type ServerResources struct {
+	g *Globals
 	// A copy of [indexHTML] with the currently known sources
 	// listed at the <!--SOURCES--> placeholder.
 	cachedHome atomic.Pointer[[]byte]
@@ -155,122 +173,153 @@ type ValidSourceDescriptor struct {
 	sub *[]ValidSourceDescriptor
 }
 
-func main() {
-	parseFlags()
-	cr, err := initResources()
-	if err != nil {
-		log.Fatal(err)
-	}
-	if demoLines >= 0 {
-		log.Printf("Starting demo mode. Iterations: %d. Sleep: %d", demoLines, maxDemoSleep)
-		runDemo(demoLines, cr)
-		return
-	}
-	if capture {
-		log.Printf("Starting capture mode. Capture id: \"%s\". Home path: \"%s\". Capture path: \"%s\"", captureId, homePath, capturePath)
-		err = startCapture(cr)
-	} else {
-		log.Println("Starting server mode.")
-		err = startServer(cr)
-	}
-	if err != nil {
-		log.Fatal(err)
-	}
+type Initializer struct {
+	GlobalConfig
+	logTempBuffer *bytes.Buffer
+	logOutput     io.Writer
 }
 
-func initResources() (cr *CoreResources, err error) {
-	cr = &CoreResources{}
-	cr.shutdown = make(chan int)
-	if logging || captureLogs {
-		log.SetFlags(LOGGER_FLAGS)
-		log.SetPrefix("[Main] ")
-	} else {
-		log.SetOutput(io.Discard)
-	}
-
-	if !captureLogs { // otherwise delay the log until opening the file
-		// TODO logging buffer
-		log.Printf("Initializing with args: %+v", os.Args)
-	}
-
-	if homePath == "" {
+func (i *Initializer) initHomePath() error {
+	if i.homePath == "" {
 		ex, err := os.Executable()
 		if err != nil {
-			return cr, fmt.Errorf("failed to read home path: %+v", err)
+			return fmt.Errorf("retrieve executable path: %w", err)
 		}
-		homePath, err = resolveAbsolutePath(filepath.Dir(ex))
+		i.homePath = filepath.Dir(ex)
+	}
+	return nil
+}
+
+func (i *Initializer) initCapturePath() error {
+	if p, err := resolveAbsolutePath(i.capturePath, i.homePath); err != nil {
+		return fmt.Errorf("resolve absolute path: %w", err)
+	} else {
+		i.capturePath = p
+	}
+	return nil
+}
+
+func (i *Initializer) initGlobalLogger() {
+	i.logOutput = io.Discard
+	i.logTempBuffer = bytes.NewBuffer(make([]byte, 4096))
+	log.SetFlags(LOGGER_FLAGS)
+	log.SetPrefix("[Main] ")
+	log.SetOutput(i.logTempBuffer)
+}
+
+func (i *Initializer) swapLoggerOutput() {
+	// UNSAFE: non-atomic swap. Must run before starting goroutines.
+	log.SetOutput(i.logOutput)
+	i.logOutput.Write(i.logTempBuffer.Bytes())
+}
+
+func (i *Initializer) initCaptureDir() error {
+	if i.capture || i.captureLogs {
+		err := os.MkdirAll(filepath.Dir(i.capturePath), 0755)
 		if err != nil {
-			return cr, fmt.Errorf("failed to resolve home path: %+v", err)
-		}
-		if !strings.HasSuffix(homePath, string(filepath.Separator)) {
-			homePath += string(filepath.Separator)
+			return fmt.Errorf("create directory: %w", err)
 		}
 	}
+	return nil
+}
 
-	capturePath, err = resolveAbsolutePath(capturePath)
-	if err != nil {
-		return cr, fmt.Errorf("failed to resolve capture path: %+v", err)
-	}
-	if !strings.HasSuffix(capturePath, string(filepath.Separator)) {
-		capturePath += string(filepath.Separator)
-	}
-
-	if capture || captureLogs {
-		err = os.MkdirAll(filepath.Dir(capturePath), 0755)
-		if err != nil {
-			return cr, fmt.Errorf("failed to create capture directory: %+v", err)
-		}
-	}
-
-	if captureLogs {
-		path := filepath.Join(capturePath, fmt.Sprintf("%s-%s.log", captureId, LOG_FILE_NAME))
-		if rolling {
-			log.SetOutput(*getRollingLogger(path))
+func (i *Initializer) initLogCapture() (err error) {
+	if i.captureLogs {
+		path := filepath.Join(i.capturePath, fmt.Sprintf("%s-%s.log", i.captureId, LOG_FILE_NAME))
+		if i.rolling {
+			i.logOutput = getRollingLogger(path, i.logChunkSize)
 		} else {
 			lf, err := os.Create(path)
 			if err != nil {
-				err = fmt.Errorf("failed to create log file %q: %+v", path, err)
-				return cr, err
+				return fmt.Errorf("create log file %q: %w", path, err)
 			}
-			log.SetOutput(lf)
-			log.Printf("Initializing with args: %+v", flag.Args()) // TODO logging buffer
+			i.logOutput = lf
 		}
 	}
-
-	log.Printf("Resources initialized. Working under %q", homePath)
-
-	if capture || captureLogs {
-		log.Printf("Capture path: %q", capturePath)
-	}
-
-	return cr, err
+	return nil
 }
 
-func getRollingLogger(filename string) *io.Writer {
+// TODO: this can only run on the main thread, before starting additional goroutines.
+func (i Initializer) init() (g *Globals, err error) {
+	i.parseFlags()
+	g = &Globals{
+		GlobalConfig: &i.GlobalConfig,
+		shutdown:     make(chan int),
+	}
+
+	i.initGlobalLogger()
+	defer i.swapLoggerOutput()
+
+	log.Printf("Initializing with args: %+v", os.Args)
+
+	if err := i.initHomePath(); err != nil {
+		return g, fmt.Errorf("initialize home path: %w", err)
+	}
+	if err := i.initCapturePath(); err != nil {
+		return g, fmt.Errorf("initialize capture path: %w", err)
+	}
+	if err = i.initCaptureDir(); err != nil {
+		return g, fmt.Errorf("initialize capture directory: %w", err)
+	}
+	if err := i.initLogCapture(); err != nil {
+		return g, fmt.Errorf("initialize log capture: %w", err)
+	}
+
+	log.Printf("Globals initialized. Working under %q", g.homePath)
+	if g.capture || g.captureLogs {
+		log.Printf("Capture path: %q", g.capturePath)
+	}
+
+	return g, nil
+}
+
+func main() {
+	g, err := Initializer{}.init()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if g.demoLines >= 0 {
+		log.Printf("Starting demo mode. Iterations: %d. Sleep: %d", g.demoLines, g.maxDemoSleep)
+		runDemo(g)
+		return
+	}
+	if g.capture {
+		log.Printf("Starting capture mode. Capture id: \"%s\". Home path: \"%s\". Capture path: \"%s\"", g.captureId, g.homePath, g.capturePath)
+		err = startCapture(g)
+	} else {
+		log.Println("Starting server mode.")
+		err = startServer(g)
+	}
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func getRollingLogger(filename string, chunkSize int) io.Writer {
 	if !strings.HasSuffix(filename, ".log") {
 		filename += ".log"
 	}
 	var w io.Writer = &lumberjack.Logger{
 		Filename: filename,
-		MaxSize:  logChunkMb, // MB
+		MaxSize:  chunkSize,
 	}
-	return &w
+	return w
 }
 
-func runDemo(lines int, cr *CoreResources) {
+func runDemo(g *Globals) {
 	const format = "Demo log line %d. Sample string: %q"
 	const sample = "this string will appear %d times :)"
-	if lines == 0 {
+	if g.demoLines == 0 {
 		i := uint64(0)
 		for {
-			time.Sleep(time.Duration(rand.Intn(maxDemoSleep)) * time.Millisecond)
+			time.Sleep(time.Duration(rand.Intn(g.maxDemoSleep)) * time.Millisecond)
 			n := slices.Min([]int{rand.Intn(12), rand.Intn(12), rand.Intn(12)}) + 1
 			log.Printf(format, i, strings.Join(slices.Repeat([]string{fmt.Sprintf(sample, n)}, n), " "))
 			i++
 		}
 	} else {
-		for i := range lines {
-			time.Sleep(time.Duration(rand.Intn(maxDemoSleep)) * time.Millisecond)
+		for i := range g.demoLines {
+			time.Sleep(time.Duration(rand.Intn(g.maxDemoSleep)) * time.Millisecond)
 			n := slices.Min([]int{rand.Intn(12), rand.Intn(12), rand.Intn(12)}) + 1
 			log.Printf(format, i, strings.Join(slices.Repeat([]string{fmt.Sprintf(sample, n)}, n), " "))
 		}
@@ -278,13 +327,13 @@ func runDemo(lines int, cr *CoreResources) {
 
 }
 
-func startCapture(cr *CoreResources) (err error) {
+func startCapture(g *Globals) (err error) {
 	var writer io.Writer
-	if rolling {
-		path := filepath.Join(capturePath, captureId, captureId)
-		writer = *getRollingLogger(path)
+	if g.rolling {
+		path := filepath.Join(g.capturePath, g.captureId, g.captureId)
+		writer = getRollingLogger(path, g.logChunkSize)
 	} else {
-		path := filepath.Join(capturePath, captureId+".log")
+		path := filepath.Join(g.capturePath, g.captureId+".log")
 		log.Printf("Creating capture file: %q", path)
 		f, err := os.Create(path)
 		if err != nil {
@@ -297,15 +346,16 @@ func startCapture(cr *CoreResources) (err error) {
 	return err
 }
 
-func startServer(cr *CoreResources) (err error) {
+func startServer(g *Globals) (err error) {
 	sr := ServerResources{}
+	sr.g = g
 	sr.log = getLogger("[Server]")
-	sr.log.Printf("Resolving sourcePaths: %q", sourcePaths)
+	sr.log.Printf("Resolving sourcePaths: %q", g.sourcePaths)
 	var resolved []string
-	for str := range strings.SplitSeq(sourcePaths, ",") {
+	for str := range strings.SplitSeq(g.sourcePaths, ",") {
 		var sd RawSourceDescriptor
 		sd.rawPath = str
-		abs, err := resolveAbsolutePath(str)
+		abs, err := resolveAbsolutePath(str, g.homePath)
 		if sd.valid = err == nil; sd.valid {
 			sd.absPath = abs
 			resolved = append(resolved, abs)
@@ -318,7 +368,7 @@ func startServer(cr *CoreResources) (err error) {
 	statSources(&sr)
 	buildHome(&sr)
 
-	addr := fmt.Sprintf(":%d", serverPort)
+	addr := fmt.Sprintf(":%d", g.port)
 	shutdown := buildServer(&sr, addr)
 
 	sr.log.Printf("Starting server on: %q", addr)
@@ -507,7 +557,7 @@ func streamLogFile(tag string, sr *ServerResources, vsd *ValidSourceDescriptor, 
 			}
 			conn.WriteMessage(websocket.TextMessage, line)
 		}
-		t.Reset(time.Duration(pollIntervalMs))
+		t.Reset(time.Duration(sr.g.pollingInterval))
 		<-t.C
 	}
 
@@ -566,24 +616,13 @@ func getLogger(p string) *log.Logger {
 	return &l
 }
 
-func resolveAbsolutePath(p string) (_ string, err error) {
+func resolveAbsolutePath(p string, homePath string) (_ string, err error) {
 	if fromHome, found := strings.CutPrefix(p, "app://"); found {
 		p = filepath.Join(homePath, fromHome)
 	}
-	if !filepath.IsAbs(p) {
-		p, err = filepath.Abs(p)
-		if err != nil {
-			return p, err
-		}
-	}
-	return p, nil
-}
-
-func resolveRelativePath(p string) (_ string, err error) {
-	if fromHome, found := strings.CutPrefix(p, "app://"); found {
-		p = filepath.Join(homePath, fromHome)
-	} else if filepath.IsAbs(p) {
-		return filepath.Rel(homePath, p)
+	p, err = filepath.Abs(p)
+	if err != nil {
+		return p, err
 	}
 	return p, nil
 }
