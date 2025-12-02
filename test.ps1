@@ -13,9 +13,9 @@ go build -o $exe
 
 if ($args[0] -eq "-demo") {
     if ($args[2 -eq "-demoSleep"]) {
-        &$exe -sl -demo $args[1] -id="demo" -demoSleep $args[3]
+        &$exe -sl -d -demo $args[1] -id="demo" -demoSleep $args[3]
     } else {
-        &$exe -sl -demo $args[1] -id="demo"
+        &$exe -sl -d -demo $args[1] -id="demo"
     }
     return
 }

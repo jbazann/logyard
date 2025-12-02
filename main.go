@@ -52,9 +52,10 @@ type BaseConfig struct {
 }
 
 type DemoConfig struct {
+	demo bool // Whether the process should run in demo mode.
 	// Amount of lines to print in demo mode.
-	// Enables demo mode for non-negative values.
-	// A value of zero prints until SIGKILL.
+	//
+	// Non-positive values print until the process is manually terminated.
 	demoLines int
 	// Maximum amount of milliseconds to sleep between prints.
 	maxDemoSleep int
@@ -116,8 +117,9 @@ func (c *GlobalConfig) parseFlags() {
 	flag.BoolVar(&c.capture, "c", false, "Toggle capture mode.")
 	flag.StringVar(&c.capturePath, "cdir", DEFAULT_CAPTURE_DIR, "The directory where capture files are created. Capture mode only.")
 	// demo mode
-	flag.IntVar(&c.demoLines, "demo", -1, "A number of lines to print to sdout. Enables demo mode for any non-negative value. "+
-		"A value of zero (0) will print logs indefinitely.")
+	flag.BoolVar(&c.demo, "d", false, "Toggle demo mode.")
+	flag.IntVar(&c.demoLines, "demo", -1, "A number of lines to print before exiting demo mode. "+
+		"Non-positive values (zero or less) will print until the process is manually terminated.")
 	flag.IntVar(&c.maxDemoSleep, "maxDemoInterval", 500,
 		"The maximum number of milliseconds to sleep between demo logs. "+
 			"The actual time is randomized between prints, following a uniform distribution.")
@@ -278,7 +280,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if g.demoLines >= 0 {
+	if g.demo {
 		log.Printf("Starting demo mode. Iterations: %d. Sleep: %d", g.demoLines, g.maxDemoSleep)
 		runDemo(g)
 		return
@@ -286,10 +288,13 @@ func main() {
 	if g.capture {
 		log.Printf("Starting capture mode. Capture id: \"%s\". Home path: \"%s\". Capture path: \"%s\"", g.captureId, g.homePath, g.capturePath)
 		err = startCapture(g)
-	} else {
-		log.Println("Starting server mode.")
-		err = startServer(g)
+		if err != nil {
+			log.Fatal(err)
+		}
+		return
 	}
+	log.Println("Starting server mode.")
+	err = startServer(g)
 	if err != nil {
 		log.Fatal(err)
 	}
