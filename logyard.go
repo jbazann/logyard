@@ -217,7 +217,7 @@ func (i *Initializer) swapLoggerOutput() {
 
 func (i *Initializer) initCaptureDir() error {
 	if i.capture || i.captureLogs {
-		err := os.MkdirAll(filepath.Dir(i.capturePath), 0755)
+		err := os.MkdirAll(i.capturePath, 0755)
 		if err != nil {
 			return fmt.Errorf("create directory: %w", err)
 		}
