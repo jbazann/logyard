@@ -203,7 +203,7 @@ func (i *Initializer) initCapturePath() error {
 
 func (i *Initializer) initGlobalLogger() {
 	i.logOutput = io.Discard
-	i.logTempBuffer = bytes.NewBuffer(make([]byte, 4096))
+	i.logTempBuffer = bytes.NewBuffer(make([]byte, 0, 4096))
 	log.SetFlags(LOGGER_FLAGS)
 	log.SetPrefix("[Main] ")
 	log.SetOutput(i.logTempBuffer)
