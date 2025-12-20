@@ -318,7 +318,7 @@ func getRollingLogger(filename string, chunkSize int) io.Writer {
 func runDemo(g *Globals) {
 	const format = "Demo log line %d. Sample string: %q"
 	const sample = "this string will appear %d times :)"
-	if g.demoLines == 0 {
+	if g.demoLines < 1 {
 		i := uint64(0)
 		for {
 			time.Sleep(time.Duration(rand.Intn(g.maxDemoSleep)) * time.Millisecond)
