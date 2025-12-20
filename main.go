@@ -251,6 +251,10 @@ func (i Initializer) init() (g *Globals, err error) {
 
 	i.initGlobalLogger()
 	defer i.swapLoggerOutput()
+	if i.logging {
+		// TODO: multi-writer when both -l and -cl are present.
+		i.logOutput = os.Stdout
+	}
 
 	log.Printf("Initializing with args: %+v", os.Args)
 
