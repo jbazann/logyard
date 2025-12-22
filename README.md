@@ -47,6 +47,31 @@ Only a prototype is available at the moment.
 
 This repository includes a demo script for PowerShell, though it's easy to replicate in any platform. Just start a `demo mode` instance and pipe its output into a `capture mode` one or directly into a file in the same directory as the binary, then run `./logyard -src app://`. 
 
+## Project commands (for development only)
+
+### Installation
+
+[magefile]: magefile.org/ "Magefile's official website."
+
+This project uses [magefile] for task automation. To install it, use:
+```sh
+go install github.com/magefile/mage@latest
+```
+
+### Mage binary (no-install option)
+
+The repository includes a `mg.exe` binary compiled for Windows/386. All of the tasks below are available through this binary. It's also faster to run them this way.
+
+For other GOOS/GOARCH systems, this binary can be compiled using either `mage update <binary name>` or `mage -compile ../<binary name>`. Note that this requires installing mage.
+
+### Tasks
+
+The following commands are currently available:
+
+- `mage build`: basic `go build` wrapper. Specifics are subject to change.
+- `mage demo`: builds a demo version, then runs it to showcase functionality. It is roughly equivalent to  `logyard -d -l 2>&1 | logyard -c; logyard`. It also handles the termination; the task will await any input to kill all processes and return.
+- `mage clean`: deletes any build artifacts created by other tasks.
+
 ## License
 
 TODO
