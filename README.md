@@ -45,8 +45,6 @@ Support for environment variables and configuration files will be added "eventua
 
 Only a prototype is available at the moment. 
 
-This repository includes a demo script for PowerShell, though it's easy to replicate in any platform. Just start a `demo mode` instance and pipe its output into a `capture mode` one or directly into a file in the same directory as the binary, then run `./logyard -src app://`. 
-
 ## Project commands (for development only)
 
 ### Installation
